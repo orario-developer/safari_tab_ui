@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -14,7 +16,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   Animation<double> tabListAnimation;
   Animation<double> tabListOpacityAnimation;
   AnimationController tabListAnimationController;
-  double dragDeltaY = 0.0;
+
+  double tabYPosition = 0.0;
   int currentIndex = 0;
   double tabDistance = 60.0;
 
@@ -22,10 +25,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   List<Color> colors = [Colors.white, Colors.white70, Colors.white30];
 
   List pages;
-  void _initializePages() {
-    if (pages != null) return;
-    pages = [_buildTab(), _buildBottomSheet()];
-  }
 
   @override
   void initState() {
@@ -51,7 +50,16 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   void dispose() {
     pageController.dispose();
     iconAnimationController.dispose();
+    tabListAnimationController.dispose();
     super.dispose();
+  }
+
+  void _initializePages() {
+    if (pages != null) {
+      pages[0] = _buildTab();
+      return;
+    }
+    pages = [_buildTab(), _buildBottomSheet()];
   }
 
   @override
@@ -106,33 +114,69 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           child: Stack(
             overflow: Overflow.visible,
             children: [
-              // TODO:create dynamically
-              AnimatedBuilder(
-                animation: tabListAnimation,
-                builder: (context, child) {
-                  return _buildPositioned(child, 0);
-                },
-                child: _buildTabContent(context, 0),
-              ),
-              AnimatedBuilder(
-                animation: tabListAnimation,
-                builder: (context, child) {
-                  return _buildPositioned(child, 1);
-                },
-                child: _buildTabContent(context, 1),
-              ),
-              AnimatedBuilder(
-                animation: tabListAnimation,
-                builder: (context, child) {
-                  return _buildPositioned(child, 2);
-                },
-                child: _buildTabContent(context, 2),
-              ),
+              _buildPositioned(
+                  _buildTabContent(context, 0), tabYPosition, -tabYPosition, 1)
             ],
           ),
         ),
         _buildAd(),
       ],
+    );
+  }
+
+  Widget _buildPositioned(
+      Widget child, double top, double bottom, double opacity) {
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      child: Opacity(
+        opacity: opacity,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildTabContent(BuildContext context, int index) {
+    return Container(
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.001)
+        ..rotateX(0.01 * min(tabYPosition, 90)),
+      width: MediaQuery.of(context).size.width,
+      decoration: BoxDecoration(
+        color: colors[index], // DEBUG: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(27.0),
+          topRight: Radius.circular(27.0),
+        ),
+        boxShadow: _buildTabShadow(),
+      ),
+      child: Column(
+        children: <Widget>[
+          GestureDetector(
+            onTap: () {
+              currentIndex = index;
+              tabYPosition = 0.0;
+            },
+            onVerticalDragUpdate: (DragUpdateDetails details) {
+              currentIndex = -1;
+              var newY = tabYPosition + details.delta.dy;
+              if (0 < newY && newY < tabDistance * 4) {
+                setState(() {
+                  tabYPosition = newY;
+                });
+              }
+            },
+            child: Container(
+              height: 60,
+              child: Text('Drag Area'),
+              color: Colors.grey,
+            ),
+          ),
+          Text('Hi!'),
+          Text('Hi!'),
+          Text('Hi!'),
+        ],
+      ),
     );
   }
 
@@ -191,45 +235,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTabContent(BuildContext context, int index) {
-    return Container(
-      width: MediaQuery.of(context).size.width,
-      decoration: BoxDecoration(
-        color: colors[index], // DEBUG: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(27.0),
-          topRight: Radius.circular(27.0),
-        ),
-        boxShadow: _buildTabShadow(),
-      ),
-      child: Column(
-        children: <Widget>[
-          GestureDetector(
-            onTap: () {
-              currentIndex = index;
-              _resetTabPosition();
-            },
-            onVerticalDragUpdate: (DragUpdateDetails details) {
-              dragDeltaY += details.delta.dy;
-              if (dragDeltaY < 10.0) return;
-              dragDeltaY = 0.0;
-              currentIndex = -1;
-              _renderTabList();
-            },
-            child: Container(
-              height: 60,
-              child: Text('Drag Area'),
-              color: Colors.grey,
-            ),
-          ),
-          Text('Hi!'),
-          Text('Hi!'),
-          Text('Hi!'),
-        ],
-      ),
-    );
-  }
-
   List<BoxShadow> _buildTabShadow() {
     return <BoxShadow>[
       BoxShadow(
@@ -242,37 +247,5 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         ),
       ),
     ];
-  }
-
-  void _renderTabList() {
-    tabListAnimationController.forward();
-  }
-
-  void _resetTabPosition() {
-    print(currentIndex);
-    tabListAnimationController.reverse();
-  }
-
-  Widget _buildPositioned(Widget child, int index) {
-    return Positioned(
-      top: _getTabTopPosition(index),
-      bottom: _getTabBottomPosition(index),
-      child: index != currentIndex
-          ? Opacity(
-              opacity: tabListOpacityAnimation.value,
-              child: child,
-            )
-          : child,
-    );
-  }
-
-  double _getTabTopPosition(int index) {
-    if (index == currentIndex) return 0.0;
-    return tabListAnimation.value - tabDistance + (index * tabDistance);
-  }
-
-  double _getTabBottomPosition(int index) {
-    if (index == currentIndex) return 0.0;
-    return -tabListAnimation.value - tabDistance + (index * tabDistance);
   }
 }
